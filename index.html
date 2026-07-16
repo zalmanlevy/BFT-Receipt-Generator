@@ -374,18 +374,28 @@
       $('btn-pdf').disabled = !on;
     }
 
+    // Safari requires the async work to happen INSIDE the ClipboardItem promise so
+    // the browser still considers the write user-initiated. Do not await beforehand.
+    function writeReceiptToClipboard() {
+      return navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': (async () => {
+            const canvas = await captureCanvas();
+            const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+            if (!blob) throw new Error('image blob failed');
+            return blob;
+          })()
+        })
+      ]);
+    }
+
     async function copyReceipt(evt) {
       if (!currentData) return;
       const btn = evt && evt.currentTarget;
       const original = btn ? btn.textContent : null;
       setStatus('Copying to clipboard…', '');
       try {
-        const canvas = await captureCanvas();
-        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-        if (!blob) throw new Error('image blob failed');
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob })
-        ]);
+        await writeReceiptToClipboard();
         setStatus('Receipt copied to clipboard.', 'ok');
         if (btn) {
           btn.textContent = 'Copied!';
@@ -418,20 +428,14 @@
       toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
     }
 
-    // Tap-to-copy on the receipt while in fullscreen view
-    $('receipt').addEventListener('click', async () => {
+    // Tap-to-copy on the receipt while in fullscreen view.
+    // Do NOT mark this handler async — Safari needs writeReceiptToClipboard()
+    // called synchronously inside the user-gesture click.
+    $('receipt').addEventListener('click', () => {
       if (!document.body.classList.contains('presenting') || !currentData) return;
-      try {
-        const canvas = await captureCanvas();
-        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-        if (!blob) throw new Error('image blob failed');
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob })
-        ]);
-        showToast('✓ Copied to clipboard');
-      } catch (e) {
-        showToast('Copy failed');
-      }
+      writeReceiptToClipboard()
+        .then(() => showToast('✓ Copied to clipboard'))
+        .catch(() => showToast('Copy failed'));
     });
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && document.body.classList.contains('presenting')) {
