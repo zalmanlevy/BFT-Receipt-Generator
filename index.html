@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faiden Travel Receipt Generator</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f3f4f6;
+    color: #111827;
+    padding: 20px;
+  }
+  .page { max-width: 900px; margin: 0 auto; }
+  h1 { color: #1e3a5f; margin: 0 0 6px 0; font-size: 24px; }
+  p.sub { color: #6b7280; margin: 0 0 20px 0; font-size: 14px; }
+
+  .panel {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+  }
+  textarea {
+    width: 100%;
+    height: 200px;
+    font-family: 'SF Mono', Menlo, Monaco, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    resize: vertical;
+    color: #111827;
+  }
+  textarea:focus {
+    outline: none;
+    border-color: #1e3a5f;
+    box-shadow: 0 0 0 3px rgba(30,58,95,0.15);
+  }
+  .buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  button {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity 0.15s;
+  }
+  button:hover:not(:disabled) { opacity: 0.9; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.primary { background: #1e3a5f; color: white; }
+  button.success { background: #22c55e; color: white; }
+  .status {
+    margin-top: 10px;
+    font-size: 13px;
+    min-height: 18px;
+  }
+  .status.error { color: #dc2626; }
+  .status.ok { color: #16a34a; }
+
+  #receipt-wrapper {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    overflow: auto;
+  }
+
+  /* Receipt (matches the PAID receipt design) */
+  #receipt {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 48px;
+    background: #ffffff;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    color: #1a1a1a;
+    line-height: 1.5;
+  }
+  #receipt .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #1e3a5f;
+    margin-bottom: 28px;
+  }
+  #receipt .brand { display: flex; align-items: center; gap: 18px; }
+  #receipt .brand img { height: 72px; width: auto; display: block; }
+  #receipt .brand-name {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #1e3a5f;
+  }
+  #receipt .doc-title { text-align: right; }
+  #receipt .doc-title .title {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #1e3a5f;
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+  #receipt .paid-badge {
+    display: inline-block;
+    padding: 6px 22px;
+    background: #22c55e;
+    color: #ffffff;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  #receipt .info-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+  #receipt .info-row .left,
+  #receipt .info-row .right { line-height: 1.7; }
+  #receipt .info-row .right { text-align: right; }
+  #receipt .info-row .lbl { font-weight: 700; }
+  #receipt .detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  #receipt .detail-row .lbl { color: #6b7280; }
+  #receipt .detail-row .val { color: #1a1a1a; font-weight: 700; }
+  #receipt .total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 22px 0 8px 0;
+    font-size: 20px;
+    font-weight: 800;
+    color: #1a1a1a;
+  }
+  #receipt .total-row .val { font-variant-numeric: tabular-nums; }
+  #receipt .footer {
+    margin-top: 44px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <h1>Faiden Travel Receipt Generator</h1>
+    <p class="sub">Paste the JSON block from Claude and click Download.</p>
+
+    <div class="panel">
+      <label for="input">Receipt data (JSON):</label>
+      <textarea id="input" spellcheck="false" placeholder='{"refnum":"4367136273","authcode":"07494I","cardBrand":"Visa","cardLast4":"8643","cardholder":"Noach Y Kosofsky","date":"July 16, 2026, 10:39 AM EDT","amountApproved":"$1,365.00"}'></textarea>
+      <div class="buttons">
+        <button class="success" id="btn-png" onclick="downloadPNG()" disabled>Download PNG</button>
+        <button class="success" id="btn-pdf" onclick="downloadPDF()" disabled>Download PDF</button>
+        <button class="primary" onclick="clearAll()">Clear</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div id="receipt-wrapper">
+      <div id="receipt">
+        <div class="header">
+          <div class="brand">
+            <img src="faiden-logo.png" alt="Faiden Travel" crossorigin="anonymous">
+            <span class="brand-name">FAIDEN TRAVEL</span>
+          </div>
+          <div class="doc-title">
+            <div class="title">RECEIPT</div>
+            <span class="paid-badge">PAID</span>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="left">
+            <div><span class="lbl">Receipt #:</span> <span id="f-refnum">&mdash;</span></div>
+            <div><span class="lbl">Date:</span> <span id="f-date">&mdash;</span></div>
+          </div>
+          <div class="right">
+            <div class="lbl">Billed to:</div>
+            <div id="f-cardholder">&mdash;</div>
+          </div>
+        </div>
+        <div class="detail-row">
+          <span class="lbl">Payment method</span>
+          <span class="val"><span id="f-cardBrand">&mdash;</span> ending <span id="f-cardLast4">&mdash;</span></span>
+        </div>
+        <div class="detail-row">
+          <span class="lbl">Authorization code</span>
+          <span class="val" id="f-authcode">&mdash;</span>
+        </div>
+        <div class="detail-row" id="row-subtotal" style="display:none;">
+          <span class="lbl">Subtotal</span>
+          <span class="val" id="f-subtotal">&mdash;</span>
+        </div>
+        <div class="detail-row" id="row-tax" style="display:none;">
+          <span class="lbl">Tax</span>
+          <span class="val" id="f-tax">&mdash;</span>
+        </div>
+        <div class="total-row">
+          <span>Total charged</span>
+          <span class="val" id="f-amountApproved">&mdash;</span>
+        </div>
+        <div class="footer">
+          <div>Thank you for booking with Faiden Travel.</div>
+          <div>billing@faidentravel.com &nbsp;&bull;&nbsp; +1 (954) 410-3700</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const $ = id => document.getElementById(id);
+    let currentData = null;
+
+    function setStatus(msg, kind) {
+      const el = $('status');
+      el.textContent = msg || '';
+      el.className = 'status ' + (kind || '');
+    }
+
+    function enableButtons(on) {
+      $('btn-png').disabled = !on;
+      $('btn-pdf').disabled = !on;
+    }
+
+    function render(data) {
+      $('f-refnum').textContent = data.refnum || '—';
+      $('f-date').textContent = data.date || '—';
+      $('f-cardholder').textContent = data.cardholder || '—';
+      $('f-cardBrand').textContent = data.cardBrand || '—';
+      $('f-cardLast4').textContent = data.cardLast4 || '—';
+      $('f-authcode').textContent = data.authcode || '—';
+      $('f-amountApproved').textContent = data.amountApproved || '—';
+
+      const hasSub = data.subtotal !== undefined && data.subtotal !== null && data.subtotal !== '';
+      const hasTax = data.tax !== undefined && data.tax !== null && data.tax !== '';
+      $('row-subtotal').style.display = hasSub ? '' : 'none';
+      $('row-tax').style.display = hasTax ? '' : 'none';
+      if (hasSub) $('f-subtotal').textContent = data.subtotal;
+      if (hasTax) $('f-tax').textContent = data.tax;
+    }
+
+    function parseAndRender() {
+      const raw = $('input').value.trim();
+      if (!raw) {
+        setStatus('', '');
+        enableButtons(false);
+        return;
+      }
+      try {
+        const data = JSON.parse(raw);
+        currentData = data;
+        render(data);
+        setStatus('Receipt ready — use the download buttons.', 'ok');
+        enableButtons(true);
+      } catch (e) {
+        setStatus('Invalid JSON: ' + e.message, 'error');
+        enableButtons(false);
+      }
+    }
+
+    async function captureCanvas() {
+      const el = $('receipt');
+      return await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false
+      });
+    }
+
+    async function downloadPNG() {
+      if (!currentData) return;
+      setStatus('Generating PNG…', '');
+      try {
+        const canvas = await captureCanvas();
+        const link = document.createElement('a');
+        link.download = `Faiden-Travel-Receipt-${currentData.refnum || 'receipt'}.png`;
+        link.href = canvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setStatus('PNG downloaded.', 'ok');
+      } catch (e) {
+        setStatus('PNG failed: ' + e.message, 'error');
+      }
+    }
+
+    async function downloadPDF() {
+      if (!currentData) return;
+      setStatus('Generating PDF…', '');
+      try {
+        const canvas = await captureCanvas();
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
+        const pageW = pdf.internal.pageSize.getWidth();
+        const marginPt = 36;
+        const imgW = pageW - marginPt * 2;
+        const imgH = imgW * (canvas.height / canvas.width);
+        pdf.addImage(imgData, 'PNG', marginPt, marginPt, imgW, imgH);
+        pdf.save(`Faiden-Travel-Receipt-${currentData.refnum || 'receipt'}.pdf`);
+        setStatus('PDF downloaded.', 'ok');
+      } catch (e) {
+        setStatus('PDF failed: ' + e.message, 'error');
+      }
+    }
+
+    function clearAll() {
+      $('input').value = '';
+      currentData = null;
+      render({});
+      enableButtons(false);
+      setStatus('', '');
+    }
+
+    $('input').addEventListener('input', parseAndRender);
+
+    // Optional: auto-fill from ?d=<url-encoded-json>
+    const d = new URLSearchParams(location.search).get('d');
+    if (d) {
+      try {
+        $('input').value = decodeURIComponent(d);
+        parseAndRender();
+      } catch (e) { /* ignore */ }
+    }
+  </script>
+</body>
+</html>
